@@ -60,3 +60,4 @@ This project consists of a web application that allows users to upload transcrip
 - If you encounter CORS issues, ensure that the Flask-CORS extension is properly installed and configured.
 - If the OpenAI API calls fail, double-check that your API key is correct and that you have sufficient credits in your OpenAI account.
 
+(note : Index2.html has better ui, please try both)
