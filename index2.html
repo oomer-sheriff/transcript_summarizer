@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcript Summarizer</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #121212;
+            color: #E0E0E0;
+        }
+        .sidebar {
+            width: 250px;
+            background-color: #1E1E1E;
+            height: 100vh;
+            padding: 20px;
+            position: fixed;
+        }
+        .sidebar h2 {
+            color: #E0E0E0;
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+        .menu-item {
+            font-size: 16px;
+            padding: 15px;
+            color: #E0E0E0;
+            background-color: #2C2C2C;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .menu-item:hover {
+            background-color: #3E3E3E;
+        }
+        .menu-item.active {
+            background-color: #4A90E2;
+        }
+        .token-counter {
+            position: absolute;
+            bottom: 20px;
+            font-size: 14px;
+            color: #B0B0B0;
+        }
+        .content {
+            margin-left: 270px;
+            padding: 30px;
+            background-color: #121212;
+            min-height: 100vh;
+        }
+        .section {
+            display: none;
+        }
+        .section h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .section p {
+            color: #B0B0B0;
+        }
+        .section button {
+            background-color: #4A90E2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .section button:hover {
+            background-color: #357ABD;
+        }
+        textarea {
+            width: 100%;
+            max-width: 600px;
+            height: 200px;
+            padding: 15px;
+            background-color: #1E1E1E;
+            color: white;
+            border: 1px solid #3E3E3E;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .chat-input {
+            width: 100%;
+            padding: 10px;
+            margin-top: 20px;
+            background-color: #1E1E1E;
+            color: #E0E0E0;
+            border: 1px solid #3E3E3E;
+            border-radius: 8px;
+        }
+        .chat-message {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #2C2C2C;
+            border-radius: 8px;
+        }
+        .chat-message img {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        .chat-message strong {
+            margin-right: 10px;
+            color: #4A90E2;
+        }
+        .raw-text {
+            background-color: #1E1E1E;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #3E3E3E;
+        }
+        .get-topics {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Welcome</h2>
+        <div class="menu-item" onclick="showSection('upload')">Upload Transcript</div>
+        <div class="menu-item" onclick="showSection('opening-remarks')">Opening remarks summary</div>
+        <div class="menu-item" onclick="showSection('qa-summary')">Question answer summary</div>
+        <div class="menu-item" onclick="showSection('chatbot')">Chatbot</div>
+        <div class="token-counter">
+            Token counter: <span id="token-count">0</span><br>
+            Cost: $<span id="cost">0.000</span>
+        </div>
+    </div>
+
+    <div class="content">
+        <div id="upload" class="section">
+            <h1>Upload Transcript</h1>
+            <textarea id="transcript-text" placeholder="Paste your transcript here"></textarea>
+            <br>
+            <button onclick="uploadTranscript()">Upload Transcript</button>
+        </div>
+
+        <div id="opening-remarks" class="section" style="display: none;">
+            <h1>Opening remarks summary 📝</h1>
+            <p>This page will help you summarize opening remarks.<br>
+            To get started, expand raw text section for overview.<br>
+            Once ready, click Get topics.</p>
+            <div class="raw-text">
+                <h3>Raw text: who said what?</h3>
+                <div id="opening-remarks-text"></div>
+            </div>
+            <button class="get-topics" onclick="summarizeOpeningRemarks()">Get topics</button>
+            <div id="opening-remarks-summary"></div>
+        </div>
+
+        <div id="qa-summary" class="section" style="display: none;">
+            <h1>Question answer summary ⭐</h1>
+            <p>This page will help you summarize Q&A.<br>
+            To get started, expand raw text section for overview.<br>
+            Once ready, click Get topics.</p>
+            <div class="raw-text">
+                <h3>Raw text: who said what?</h3>
+                <div id="qa-text"></div>
+            </div>
+            <button class="get-topics" onclick="summarizeQA()">Get topics</button>
+            <div id="qa-summary-text"></div>
+        </div>
+
+        <div id="chatbot" class="section" style="display: none;">
+            <h1>Chatbot on transcript content 🤖</h1>
+            <p>You can ask questions to the chatbot about content from the transcript.<br>
+            It also remembers previous chat history from the current session.</p>
+            <div id="chat-history"></div>
+            <input type="text" id="chat-input" class="chat-input" placeholder="Ask a question to query your PDFs:" onkeypress="handleKeyPress(event)">
+        </div>
+    </div>
+
+    <script>
+        let currentTranscriptId = null;
+        let totalTokens = 0;
+
+        function showSection(sectionId) {
+            document.querySelectorAll('.section').forEach(section => {
+                section.style.display = 'none';
+            });
+            document.getElementById(sectionId).style.display = 'block';
+            document.querySelectorAll('.menu-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+
+        async function uploadTranscript() {
+            const transcriptText = document.getElementById('transcript-text').value;
+            const response = await fetch('http://localhost:5000/upload_transcript', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ transcript: transcriptText }),
+            });
+            const data = await response.json();
+            currentTranscriptId = data.transcript_id;
+            alert('Transcript uploaded successfully!');
+            document.getElementById('opening-remarks-text').textContent = transcriptText;
+            document.getElementById('qa-text').textContent = transcriptText;
+        }
+
+        async function summarizeOpeningRemarks() {
+            if (!currentTranscriptId) {
+                alert('Please upload a transcript first.');
+                return;
+            }
+            const response = await fetch('http://localhost:5000/summarize_opening_remarks', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ transcript_id: currentTranscriptId }),
+            });
+            const data = await response.json();
+            document.getElementById('opening-remarks-summary').textContent = data.summary;
+            updateTokenCount(data.tokens);
+        }
+
+        async function summarizeQA() {
+            if (!currentTranscriptId) {
+                alert('Please upload a transcript first.');
+                return;
+            }
+            const response = await fetch('http://localhost:5000/summarize_qa', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ transcript_id: currentTranscriptId }),
+            });
+            const data = await response.json();
+            document.getElementById('qa-summary-text').textContent = data.summary;
+            updateTokenCount(data.tokens);
+        }
+        async function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                const chatInput = document.getElementById('chat-input').value;
+                if (!chatInput.trim()) {
+                    return;
+                }
+                document.getElementById('chat-input').value = '';
+                await queryChatbot(chatInput);
+            }
+        }
+
+        async function queryChatbot(message) {
+            if (!currentTranscriptId) {
+                alert('Please upload a transcript first.');
+                return;
+            }
+
+            // Add the user's question to the chat history
+            addChatMessage('You', message);
+
+            const response = await fetch('http://localhost:5000/chatbot_query', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ transcript_id: currentTranscriptId, query: message }),
+            });
+
+            const data = await response.json();
+            addChatMessage('Chatbot', data.response);
+            updateTokenCount(data.tokens);
+        }
+
+        function addChatMessage(sender, message) {
+            const chatHistory = document.getElementById('chat-history');
+            const chatMessage = document.createElement('div');
+            chatMessage.classList.add('chat-message');
+            chatMessage.innerHTML = `
+                <strong>${sender}:</strong> ${message}
+            `;
+            chatHistory.appendChild(chatMessage);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        function updateTokenCount(tokensUsed) {
+            totalTokens += tokensUsed;
+            document.getElementById('token-count').textContent = totalTokens;
+            document.getElementById('cost').textContent = (totalTokens * 0.0001).toFixed(3);
+        }
+    </script>
+</body>
+</html>
+
