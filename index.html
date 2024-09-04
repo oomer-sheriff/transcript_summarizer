@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcript Summarizer</title>
+    <style>
+        /* ... (keep the existing CSS) ... */
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Welcome</h2>
+        <div class="menu-item" onclick="showSection('upload')">Upload Transcript</div>
+        <div class="menu-item" onclick="showSection('opening-remarks')">Opening remarks summary</div>
+        <div class="menu-item" onclick="showSection('qa-summary')">Question answer summary</div>
+        <div class="menu-item" onclick="showSection('chatbot')">Chatbot</div>
+        <div class="token-counter">
+            Token counter: <span id="token-count">0</span><br>
+            Cost: $<span id="cost">0.000</span>
+        </div>
+    </div>
+    <div class="content">
+        <div id="upload" class="section">
+            <h1>Upload Transcript</h1>
+            <textarea id="transcript-text" rows="10" cols="50" placeholder="Paste your transcript here"></textarea>
+            <br>
+            <button onclick="uploadTranscript()">Upload Transcript</button>
+        </div>
+        <div id="opening-remarks" class="section" style="display: none;">
+            <h1>Opening remarks summary 📝</h1>
+            <p>This page will help you summarize opening remarks.<br>
+            To get started, expand raw text section for overview<br>
+            Once ready, click Get topics</p>
+            <div class="raw-text">
+                <h3>Raw text: who said what?</h3>
+                <div id="opening-remarks-text"></div>
+            </div>
+            <button class="get-topics" onclick="summarizeOpeningRemarks()">Get topics</button>
+            <div id="opening-remarks-summary"></div>
+        </div>
+        <div id="qa-summary" class="section" style="display: none;">
+            <h1>Question answer summary ⭐</h1>
+            <p>This page will help you summarize Q&A.<br>
+            To get started, expand raw text section for overview<br>
+            Once ready, click Get topics</p>
+            <div class="raw-text">
+                <h3>Raw text: who said what?</h3>
+                <div id="qa-text"></div>
+            </div>
+            <button class="get-topics" onclick="summarizeQA()">Get topics</button>
+            <div id="qa-summary-text"></div>
+        </div>
+        <div id="chatbot" class="section" style="display: none;">
+            <h1>Chatbot on transcript content 🤖</h1>
+            <p>You can ask questions to chatbot about content from transcript,<br>
+            it also remembers previous chat history from the current session.</p>
+            <div id="chat-history"></div>
+            <input type="text" id="chat-input" class="chat-input" placeholder="Ask a question to query your PDFs:" onkeypress="handleKeyPress(event)">
+        </div>
+    </div>
+    <script>
+        let currentTranscriptId = null;
+        let totalTokens = 0;
+
+        function showSection(sectionId) {
+            document.querySelectorAll('.section').forEach(section => {
+                section.style.display = 'none';
+            });
+            document.getElementById(sectionId).style.display = 'block';
+            document.querySelectorAll('.menu-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+
+        async function uploadTranscript() {
+            const transcriptText = document.getElementById('transcript-text').value;
+            const response = await fetch('http://localhost:5000/upload_transcript', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ transcript: transcriptText }),
+            });
+            const data = await response.json();
+            currentTranscriptId = data.transcript_id;
+            alert('Transcript uploaded successfully!');
+            document.getElementById('opening-remarks-text').textContent = transcriptText;
+            document.getElementById('qa-text').textContent = transcriptText;
+        }
+
+        async function summarizeOpeningRemarks() {
+            if (!currentTranscriptId) {
+                alert('Please upload a transcript first.');
+                return;
+            }
+            const response = await fetch('http://localhost:5000/summarize_opening_remarks', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ transcript_id: currentTranscriptId }),
+            });
+            const data = await response.json();
+            document.getElementById('opening-remarks-summary').textContent = data.summary;
+            updateTokenCount(data.tokens);
+        }
+
+        async function summarizeQA() {
+            if (!currentTranscriptId) {
+                alert('Please upload a transcript first.');
+                return;
+            }
+            const response = await fetch('http://localhost:5000/summarize_qa', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ transcript_id: currentTranscriptId }),
+            });
+            const data = await response.json();
+            document.getElementById('qa-summary-text').textContent = data.summary;
+            updateTokenCount(data.tokens);
+        }
+
+        async function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                const question = event.target.value;
+                addChatMessage('You', question);
+                const response = await fetch('http://localhost:5000/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ transcript_id: currentTranscriptId, question: question }),
+                });
+                const data = await response.json();
+                addChatMessage('Assistant', data.answer);
+                updateTokenCount(data.tokens);
+                event.target.value = '';
+            }
+        }
+
+        function addChatMessage(sender, message) {
+            const chatHistory = document.getElementById('chat-history');
+            const messageElement = document.createElement('div');
+            messageElement.className = 'chat-message';
+            messageElement.innerHTML = `
+                <img src="/api/placeholder/30/30" alt="${sender}">
+                <strong>${sender}:</strong> ${message}
+            `;
+            chatHistory.appendChild(messageElement);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        function updateTokenCount(tokens) {
+            totalTokens += tokens;
+            document.getElementById('token-count').textContent = totalTokens;
+            const cost = (totalTokens / 1000) * 0.02; // Assuming $0.02 per 1000 tokens
+            document.getElementById('cost').textContent = cost.toFixed(3);
+        }
+
+        // Show upload section by default
+        showSection('upload');
+    </script>
+</body>
+</html>
